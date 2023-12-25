@@ -140,6 +140,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 
 	Eigen::Matrix3f rotation_matrix = current_guess_.block(0,0,3,3);
 	Eigen::Vector3f translation_vector = current_guess_.block(0,3,3,1);
+	std::cout << "==============================NDT===========================================" 
+		<< std::endl;
 	std::cout << "This transformation can be replicated using:" << std::endl;
 	std::cout << "rosrun tf static_transform_publisher " << translation_vector.transpose()
 	          << " " << rotation_matrix.eulerAngles(2,1,0).transpose() << " /" << parent_frame_
@@ -147,7 +149,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 
 	std::cout << "Corresponding transformation matrix:" << std::endl
 	          << std::endl << current_guess_ << std::endl << std::endl;
-
+	std::cout << "==============================END===========================================" 
+			<< std::endl;
 	PublishCloud(calibrated_cloud_publisher_, output_cloud);
 	}
 	
@@ -166,9 +169,9 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
     pcl::IterativeClosestPoint<PointT, PointT> icp;
     icp.setInputSource(processed_cloud);
     icp.setInputTarget(in_child_cloud);
-	icp.setMaximumIterations(max_iterations_); // You can adjust the number of iterations
-	icp.setTransformationEpsilon(transformation_epsilon_); // Adjust the convergence criteria
-	icp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); // Adjust the fitness criteria
+	icp.setMaximumIterations(max_iterations_); 
+	icp.setTransformationEpsilon(transformation_epsilon_); 
+	icp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
 	icp.align(*icp_output_cloud, initial_pose);
 
 	// 如果收敛则发布消息
@@ -179,7 +182,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	Eigen::Matrix4f transformation = icp.getFinalTransformation();
 	Eigen::Matrix3f rotation_matrix = transformation.block(0, 0, 3, 3);
 	Eigen::Vector3f translation_vector = transformation.block(0, 3, 3, 1);
-	std::cout << "==============================ICP===========================================" << std::endl;
+	std::cout << "==============================ICP==========================================="
+			<< std::endl;
 	std::cout << "This transformation can be replicated using:" << std::endl;
 	std::cout << "rosrun tf static_transform_publisher " << translation_vector.transpose()
           << " " << rotation_matrix.eulerAngles(2, 1, 0).transpose() << " /" << parent_frame_
@@ -187,7 +191,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 
 	std::cout << "Corresponding transformation matrix:" << std::endl
           << std::endl << transformation << std::endl << std::endl;
-	std::cout << "==============================END===========================================" << std::endl;
+	std::cout << "==============================END===========================================" 
+			<< std::endl;
 	PublishCloud(icp_cloud_publisher_, icp_output_cloud);
 
 	} else {
@@ -211,9 +216,9 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 		pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp;
 		gicp.setInputSource(processed_cloud);
 		gicp.setInputTarget(in_child_cloud);
-		gicp.setMaximumIterations(max_iterations_); // Adjust the number of iterations
-		gicp.setTransformationEpsilon(transformation_epsilon_); // Adjust the convergence criteria
-		gicp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); // Adjust the fitness criteria
+		gicp.setMaximumIterations(max_iterations_); 
+		gicp.setTransformationEpsilon(transformation_epsilon_); 
+		gicp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
 		// Set the initial pose and align
 		gicp.align(*gicp_output_cloud, initial_pose);
 
