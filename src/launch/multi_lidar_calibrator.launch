@@ -1,0 +1,85 @@
+<launch>
+    <!-- child为待校准的雷达话题-->
+    <arg name="points_parent_src" default="/lidar2/cloud2" />
+    <arg name="points_child_src" default="/lidar1/cloud2" />
+
+    <!-- 如果需要将3d雷达转为2d雷达则设置为true, 当parent为3d且child为2d时需要启用 -->
+    <arg name="proj" default="true" />
+    <!-- 雷达投影时需要设置保留数据的范围, 垂直方向上的范围 -->
+    <arg name="min_z_value" default="0.0" />
+    <arg name="max_z_value" default="3.0" />
+    <arg name="base_frame" default="base_lik" />
+    <arg name="lidar_frame" default="livox_frame" />
+
+    <!-- NDT参数配置 -->
+    <arg name="voxel_size" default="1.0" />
+    <arg name="ndt_epsilon" default="0.01" />
+    <arg name="ndt_step_size" default="0.1" />
+    <arg name="ndt_resolution" default="1.0" />
+    <arg name="ndt_iterations" default="400" />
+    
+    <!-- 预计child相对于parent的位置 -->
+    <arg name="x" default="-0.2" />
+    <arg name="y" default="-0.1" />
+    <arg name="z" default="-0.05" />
+    <arg name="roll" default="0" />
+    <arg name="pitch" default="0" />
+    <arg name="yaw" default="0" />
+    
+    <!-- ICP与GICP的配置 -->
+    <arg name="max_iterations_" default="1000000" />
+    <arg name="transformation_epsilon_" default="1e-10" />
+    <arg name="euclidean_fitness_epsilon" default="0.1" />
+
+    <node pkg="multi_lidar_calibrator" type="multi_lidar_calibrator" name="lidar_calibrator" output="screen">
+        <param name="points_parent_src" value="$(arg points_parent_src)" />
+        <param name="points_child_src" value="$(arg points_child_src)" />
+        <param name="voxel_size" value="$(arg voxel_size)" />
+        <param name="ndt_epsilon" value="$(arg ndt_epsilon)" />
+        <param name="ndt_step_size" value="$(arg ndt_step_size)" />
+        <param name="ndt_resolution" value="$(arg ndt_resolution)" />
+        <param name="ndt_iterations" value="$(arg ndt_iterations)" />
+        <param name="x" value="$(arg x)" />
+        <param name="y" value="$(arg y)" />
+        <param name="z" value="$(arg z)" />
+        <param name="roll" value="$(arg roll)" />
+        <param name="pitch" value="$(arg pitch)" />
+        <param name="yaw" value="$(arg yaw)" />
+        <param name="proj" value="$(arg proj)" />
+        <param name="min_z_value" value="$(arg min_z_value)" />
+        <param name="max_z_value" value="$(arg max_z_value)" />
+        <param name="max_iterations_" value="$(arg max_iterations_)" />
+        <param name="transformation_epsilon_" value="$(arg transformation_epsilon_)" />
+        <param name="euclidean_fitness_epsilon" value="$(arg euclidean_fitness_epsilon)" />
+    </node>
+
+    <!-- 是否为离线包校准 -->
+    <arg name="bag_calib" default="true" />
+    <group if="$(arg bag_calib)">
+        <!-- 注意修改包的路径 -->
+        <node name="replay_2d_lidar" pkg="rosbag" type="play" args="/home/smile/2d_tf.bag"/>
+        <node name="replay_3d_lidar" pkg="rosbag" type="play" args="/home/smile/3d_tf.bag"/>
+
+        <!-- 静态tf发布(如果需要的话) -->
+        <node pkg="tf2_ros" type="static_transform_publisher" name="link1_broadcaster" 
+            args="0.2 0.1 0.05 0 0 0 1 lidar livox_frame" />
+    </group>
+    
+    <!-- 2d点云转换到3d点云 -->
+    <!-- input_topic_pointcloud为2d点云的话题 -->
+    <!-- livox_input为livox雷达的话题 -->
+    <arg name="input_topic_pointcloud" default="/lidar1/cloud" />
+    <arg name="output_topic_pointcloud2" default="/lidar1/cloud2" />
+    <arg name="livox_input" default="/livox/lidar" />
+    <arg name="livox_output" default="/lidar2/cloud2" />
+    <node pkg="multi_lidar_calibrator" name="point2converter" type="pointcloud2_converter.py" output="screen">
+        <param name="input_topic_pointcloud" value="$(arg input_topic_pointcloud)" />
+        <param name="output_topic_pointcloud2" value="$(arg output_topic_pointcloud2)" />
+        <param name="livox_input" value="$(arg livox_input)" />
+        <param name="livox_output" value="$(arg livox_output)" />
+    </node>
+    
+    <!-- rviz -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find multi_lidar_calibrator)/rviz/lidar_calib.rviz" />
+
+</launch>
