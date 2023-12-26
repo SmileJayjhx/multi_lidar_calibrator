@@ -39,7 +39,7 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
     pcl::PointCloud<PointT>::Ptr in_child_cloud(new pcl::PointCloud<PointT>);
 	ROS_DEBUG("PointsCallback activated!");
 
-	pcl::PointCloud<PointT>::Ptr child_filtered_cloud (new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr parent_filtered_cloud (new pcl::PointCloud<PointT>);
 
 	pcl::fromROSMsg(*in_parent_cloud_msg, *in_parent_cloud);
 	pcl::fromROSMsg(*in_child_cloud_msg, *in_child_cloud);
@@ -75,17 +75,17 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 		// 	max_z_value_ += current_transform.getOrigin().z();
 		// }
 		// transform_mutex_.unlock();
-
 		// if (!transform_available_) {
 		// 	ROS_WARN("Transform not available, skipping point cloud processing.");
 		// }
-		// 2d-3d时添加范围滤波, 将z轴特定范围内的点投影到2d平面
+
+		// 2d-3d时添加范围滤波, 将z轴特定范围内的点投影到2d平面	
 		pcl::PassThrough<PointT> pass;
 		pass.setInputCloud(in_parent_cloud);
 		pass.setFilterFieldName("z");
 		pass.setFilterLimits(min_z_value_, max_z_value_);
-		pass.filter(*child_filtered_cloud);
-		for (const auto& point : child_filtered_cloud->points) {
+		pass.filter(*parent_filtered_cloud);
+		for (const auto& point : parent_filtered_cloud->points) {
 			processed_cloud->points.push_back(PointT(point.x, point.y, 0));
 		}
 
@@ -95,8 +95,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 		proj_cloud_publisher_.publish(cloud_msg);
 	}else
 	{
-		DownsampleCloud(in_child_cloud, child_filtered_cloud, voxel_size_);
-		processed_cloud = child_filtered_cloud;
+		DownsampleCloud(in_child_cloud, parent_filtered_cloud, voxel_size_);
+		processed_cloud = parent_filtered_cloud;
 	}
 
 	// Initializing Normal Distributions Transform (NDT).
@@ -109,8 +109,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 
 	ndt.setMaximumIterations(ndt_iterations_);
 
-	ndt.setInputSource(processed_cloud);
-	ndt.setInputTarget(in_parent_cloud);
+	ndt.setInputSource(in_child_cloud);
+	ndt.setInputTarget(processed_cloud);
 		
 	pcl::PointCloud<PointT>::Ptr output_cloud(new pcl::PointCloud<PointT>);
 
@@ -158,7 +158,6 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	// ICP 匹配
 	{
 	pcl::PointCloud<PointT>::Ptr icp_output_cloud(new pcl::PointCloud<PointT>);
-	// Assuming initial_x_, initial_y_, initial_z_, initial_roll_, initial_pitch_, initial_yaw_ are defined
 	Eigen::Translation3f init_translation(initial_x_, initial_y_, initial_z_);
 	Eigen::AngleAxisf init_rotation_x(initial_roll_, Eigen::Vector3f::UnitX());
 	Eigen::AngleAxisf init_rotation_y(initial_pitch_, Eigen::Vector3f::UnitY());
@@ -167,8 +166,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 
     // 示例：使用ICP进行点云匹配
     pcl::IterativeClosestPoint<PointT, PointT> icp;
-    icp.setInputSource(processed_cloud);
-    icp.setInputTarget(in_child_cloud);
+    icp.setInputSource(in_child_cloud);
+    icp.setInputTarget(processed_cloud);
 	icp.setMaximumIterations(max_iterations_); 
 	icp.setTransformationEpsilon(transformation_epsilon_); 
 	icp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
@@ -205,7 +204,6 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	{
 		pcl::PointCloud<PointT>::Ptr gicp_output_cloud(new pcl::PointCloud<PointT>);
 
-		// Assuming initial_x_, initial_y_, initial_z_, initial_roll_, initial_pitch_, initial_yaw_ are defined
 		Eigen::Translation3f init_translation(initial_x_, initial_y_, initial_z_);
 		Eigen::AngleAxisf init_rotation_x(initial_roll_, Eigen::Vector3f::UnitX());
 		Eigen::AngleAxisf init_rotation_y(initial_pitch_, Eigen::Vector3f::UnitY());
@@ -214,8 +212,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 
 		// Example: Point cloud matching using GICP
 		pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp;
-		gicp.setInputSource(processed_cloud);
-		gicp.setInputTarget(in_child_cloud);
+		gicp.setInputSource(in_child_cloud);
+		gicp.setInputTarget(processed_cloud);
 		gicp.setMaximumIterations(max_iterations_); 
 		gicp.setTransformationEpsilon(transformation_epsilon_); 
 		gicp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
