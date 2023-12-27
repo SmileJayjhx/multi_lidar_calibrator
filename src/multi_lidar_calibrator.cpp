@@ -73,8 +73,6 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 		pcl::PassThrough<PointT> pass;
 		pass.setInputCloud(in_parent_cloud);
 		pass.setFilterFieldName("z");
-		ROS_ERROR("min_z_value_: %f",min_z_value_);
-		ROS_ERROR("max_z_value_: %f",max_z_value_);
 		pass.setFilterLimits(min_z_value_, max_z_value_);
 		pass.filter(*parent_filtered_cloud);
 		for (const auto& point : parent_filtered_cloud->points) {
@@ -284,13 +282,11 @@ void ROSMultiLidarCalibratorApp::InitializeROSIo(ros::NodeHandle &in_private_han
 	in_private_handle.param<double>("min_z_value", min_z_value_, -0.5);
 	in_private_handle.param<double>("max_z_value", max_z_value_, 0.5);
 	// 添加延时, 等待坐标系建立
-	ros::Duration(2.0).sleep();
+	ros::Duration(0.5).sleep();
 	// 获取base_link到lidar坐标系的转换关系, 并修正雷达过滤范围
 	TransformConverter();
 	min_z_value_ += transform_.getOrigin().z();
 	max_z_value_ += transform_.getOrigin().z();
-	ROS_ERROR("TransformConverter min_z_value_: %f",min_z_value_);
-	ROS_ERROR("TransformConverter max_z_value_: %f",max_z_value_);
 
 	// ICP与GICP配置
 	in_private_handle.param<int>("max_iterations", max_iterations_, 100);
@@ -334,7 +330,6 @@ void ROSMultiLidarCalibratorApp::InitializeROSIo(ros::NodeHandle &in_private_han
 void ROSMultiLidarCalibratorApp::Run()
 {
 	ros::NodeHandle private_node_handle("~");
-	ROS_ERROR("Start!");
 	InitializeROSIo(private_node_handle);
 
 	ROS_INFO("[%s] Ready. Waiting for data...",__APP_NAME__);
