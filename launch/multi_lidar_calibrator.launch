@@ -3,12 +3,15 @@
     <arg name="points_parent_src" default="/lidar2/cloud2" />
     <arg name="points_child_src" default="/lidar1/cloud2" />
 
+    <!-- 是否为离线包校准 -->
+    <arg name="bag_calib" default="true" />
+    
     <!-- 如果需要将3d雷达转为2d雷达则设置为true, 当parent为3d且child为2d时需要启用 -->
     <arg name="proj" default="true" />
     <!-- 雷达投影时需要设置保留数据的范围, 垂直方向上的范围 -->
-    <arg name="min_z_value" default="0.0" />
-    <arg name="max_z_value" default="3.0" />
-    <arg name="base_frame" default="base_lik" />
+    <arg name="min_z_value" default="-0.5" />
+    <arg name="max_z_value" default="0.5" />
+    <arg name="base_frame" default="lidar" /> <!--这里填写待校准的雷达ip-->
     <arg name="lidar_frame" default="livox_frame" />
 
     <!-- NDT参数配置 -->
@@ -19,17 +22,17 @@
     <arg name="ndt_iterations" default="400" />
     
     <!-- 预计child相对于parent的位置 -->
-    <arg name="x" default="-0.2" />
-    <arg name="y" default="-0.1" />
-    <arg name="z" default="-0.05" />
+    <arg name="x" default="0.25" />
+    <arg name="y" default="0.08" />
+    <arg name="z" default="0.28" />
     <arg name="roll" default="0" />
     <arg name="pitch" default="0" />
-    <arg name="yaw" default="0" />
+    <arg name="yaw" default="0.2" />
     
     <!-- ICP与GICP的配置 -->
-    <arg name="max_iterations_" default="1000000" />
-    <arg name="transformation_epsilon_" default="1e-10" />
-    <arg name="euclidean_fitness_epsilon" default="0.1" />
+    <arg name="max_iterations" default="100" />
+    <arg name="transformation_epsilon" default="1e-8" />
+    <arg name="euclidean_fitness_epsilon" default="1" />
 
     <node pkg="multi_lidar_calibrator" type="multi_lidar_calibrator" name="lidar_calibrator" output="screen">
         <param name="points_parent_src" value="$(arg points_parent_src)" />
@@ -48,21 +51,20 @@
         <param name="proj" value="$(arg proj)" />
         <param name="min_z_value" value="$(arg min_z_value)" />
         <param name="max_z_value" value="$(arg max_z_value)" />
-        <param name="max_iterations_" value="$(arg max_iterations_)" />
-        <param name="transformation_epsilon_" value="$(arg transformation_epsilon_)" />
+        <param name="max_iterations" value="$(arg max_iterations)" />
+        <param name="transformation_epsilon" value="$(arg transformation_epsilon)" />
         <param name="euclidean_fitness_epsilon" value="$(arg euclidean_fitness_epsilon)" />
     </node>
 
-    <!-- 是否为离线包校准 -->
-    <arg name="bag_calib" default="true" />
+
     <group if="$(arg bag_calib)">
         <!-- 注意修改包的路径 -->
-        <node name="replay_2d_lidar" pkg="rosbag" type="play" args="/home/smile/2d_tf.bag"/>
-        <node name="replay_3d_lidar" pkg="rosbag" type="play" args="/home/smile/3d_tf.bag"/>
+        <node name="replay_2d_lidar" pkg="rosbag" type="play" args="/home/smile/2d_2.bag"/>
+        <node name="replay_3d_lidar" pkg="rosbag" type="play" args="/home/smile/3d_test.bag"/>
 
         <!-- 静态tf发布(如果需要的话) -->
         <node pkg="tf2_ros" type="static_transform_publisher" name="link1_broadcaster" 
-            args="0.2 0.1 0.05 0 0 0 1 lidar livox_frame" />
+            args="0.28 0.08 0.25 0 0 0 1 lidar livox_frame" />
     </group>
     
     <!-- 2d点云转换到3d点云 -->

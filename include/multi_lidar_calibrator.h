@@ -83,15 +83,16 @@ class ROSMultiLidarCalibratorApp
 	//tf::Quaternion                      initialpose_quaternion_;
 	//tf::Vector3                         initialpose_position_;
 	tf::TransformListener 				listener;
+
+	// base_link 和 lidar坐标系之间的转换关系
 	tf::StampedTransform 				transform_;
 
 	std::string                         parent_frame_;
 	std::string                         child_frame_;
 	std::string 						base_frame_;
 	std::string 						lidar_frame_;
-	boost::mutex 						transform_mutex_;
-	bool   								transform_available_ = false;
 	Eigen::Matrix4f                     current_guess_;
+	Eigen::Matrix4f                     icp_transformation;
 
 	typedef
 	message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2,
@@ -132,7 +133,7 @@ class ROSMultiLidarCalibratorApp
 	 * @param in_cloud_to_publish_ptr Cloud to Publish
 	 */
 	void PublishCloud(const ros::Publisher& in_publisher, pcl::PointCloud<PointT>::ConstPtr in_cloud_to_publish_ptr);
-	void TransformThread();
+	void TransformConverter();
 
 public:
 	void Run();

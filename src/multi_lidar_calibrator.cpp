@@ -1,3 +1,25 @@
+/*
+ * Copyright 2018-2019 Autoware Foundation. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ********************
+ *  v1.0: amc-nu (abrahammonrroy@yahoo.com)
+ *
+ * multi_lidar_calibrator.cpp
+ *
+ *  Created on: Feb 27, 2018
+ */
+
 #include "multi_lidar_calibrator.h"
 
 
@@ -8,6 +30,20 @@ void ROSMultiLidarCalibratorApp::PublishCloud(const ros::Publisher& in_publisher
 	pcl::toROSMsg(*in_cloud_to_publish_ptr, cloud_msg);
 	cloud_msg.header.frame_id = parent_frame_;
 	in_publisher.publish(cloud_msg);
+}
+
+void ROSMultiLidarCalibratorApp::TransformConverter()
+{
+	ROS_WARN("TransformConverter has been called!");
+	// 获取lidar_frame到base_link之间的坐标转换
+	try{
+		listener.waitForTransform(base_frame_, lidar_frame_, ros::Time(0), ros::Duration(0));
+		listener.lookupTransform(base_frame_, lidar_frame_, ros::Time(0), transform_);
+		ROS_INFO("z between %s and %s: %f", base_frame_.c_str(), lidar_frame_.c_str(), transform_.getOrigin().z());
+	}
+	catch (tf::TransformException &ex) {
+		ROS_ERROR("Fail to get tf between %s and %s: %s", base_frame_.c_str(), lidar_frame_.c_str(), ex.what());
+	}
 }
 
 void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::ConstPtr &in_parent_cloud_msg,
@@ -32,35 +68,13 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	{
 		ROS_INFO_ONCE("正在进行投影!");
 		// TODO: 可以过滤base_link坐标系下的点(卡点: 延迟严重, 点云匹配无法收敛)
-		// 获取lidar_frame到base_link之间的坐标转换
-		// tf::StampedTransform transform;
-		// try{
-		// 	listener.waitForTransform(base_frame_, lidar_frame_, ros::Time(0), ros::Duration(0));
-		// 	listener.lookupTransform(base_frame_, lidar_frame_, ros::Time(0), transform);
-		// 	// 计算新的 Z 范围	
-		// 	min_z_value_ += transform.getOrigin().z();
-		// 	max_z_value_ += transform.getOrigin().z();
-		// }
-		// catch (tf::TransformException &ex) {
-		// 	ROS_ERROR("Fail to get tf between %s and %s: %s", base_frame_.c_str(), lidar_frame_.c_str(), ex.what());
-		// }
-		// 尝试获取最新的变换(不好使, 单起线程也不好使)
-		// tf::StampedTransform current_transform;
-		// transform_mutex_.lock();
-		// if (transform_available_) {
-		// 	current_transform = transform_; // 使用当前可用的变换
-		// 	min_z_value_ += current_transform.getOrigin().z();
-		// 	max_z_value_ += current_transform.getOrigin().z();
-		// }
-		// transform_mutex_.unlock();
-		// if (!transform_available_) {
-		// 	ROS_WARN("Transform not available, skipping point cloud processing.");
-		// }
 
 		// 2d-3d时添加范围滤波, 将z轴特定范围内的点投影到2d平面	
 		pcl::PassThrough<PointT> pass;
 		pass.setInputCloud(in_parent_cloud);
 		pass.setFilterFieldName("z");
+		ROS_ERROR("min_z_value_: %f",min_z_value_);
+		ROS_ERROR("max_z_value_: %f",max_z_value_);
 		pass.setFilterLimits(min_z_value_, max_z_value_);
 		pass.filter(*parent_filtered_cloud);
 		for (const auto& point : parent_filtered_cloud->points) {
@@ -132,18 +146,16 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	PublishCloud(calibrated_cloud_publisher_, output_cloud);
 	}
 	
-	
 	// ICP 匹配
 	{
+	pcl::PointCloud<PointT>::Ptr icp_output_cloud(new pcl::PointCloud<PointT>);
     // 示例：使用ICP进行点云匹配
     pcl::IterativeClosestPoint<PointT, PointT> icp;
-
     icp.setInputSource(in_child_cloud);
     icp.setInputTarget(processed_cloud);
 	icp.setMaximumIterations(max_iterations_); 
 	icp.setTransformationEpsilon(transformation_epsilon_); 
 	icp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
-	// 新增使用NDT的配准结果作为ICP的初始位姿
 	icp.align(*icp_output_cloud, current_guess_);
 
 	// 如果收敛则发布消息
@@ -151,9 +163,9 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
     std::cout << "ICP converged." << std::endl
               << "The score is " << icp.getFitnessScore() << std::endl;
 
-	Eigen::Matrix4f transformation = icp.getFinalTransformation();
-	Eigen::Matrix3f rotation_matrix = transformation.block(0, 0, 3, 3);
-	Eigen::Vector3f translation_vector = transformation.block(0, 3, 3, 1);
+	Eigen::Matrix4f icp_transformation = icp.getFinalTransformation();
+	Eigen::Matrix3f rotation_matrix = icp_transformation.block(0, 0, 3, 3);
+	Eigen::Vector3f translation_vector = icp_transformation.block(0, 3, 3, 1);
 	std::cout << "==============================ICP==========================================="
 			<< std::endl;
 	std::cout << "This transformation can be replicated using:" << std::endl;
@@ -162,7 +174,7 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
           << " /" << child_frame_ << " 10" << std::endl;
 
 	std::cout << "Corresponding transformation matrix:" << std::endl
-          << std::endl << transformation << std::endl << std::endl;
+          << std::endl << icp_transformation << std::endl << std::endl;
 	std::cout << "==============================END===========================================" 
 			<< std::endl;
 	PublishCloud(icp_cloud_publisher_, icp_output_cloud);
@@ -176,6 +188,7 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	// GICP 匹配
 	{
 		pcl::PointCloud<PointT>::Ptr gicp_output_cloud(new pcl::PointCloud<PointT>);
+
 		// Example: Point cloud matching using GICP
 		pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp;
 		gicp.setInputSource(in_child_cloud);
@@ -183,7 +196,7 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 		gicp.setMaximumIterations(max_iterations_); 
 		gicp.setTransformationEpsilon(transformation_epsilon_); 
 		gicp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
-		// 将先验位姿修改为NDT生成的位姿
+		// Set the initial pose and align
 		gicp.align(*gicp_output_cloud, current_guess_);
 
 		if (gicp.hasConverged()) {
@@ -208,6 +221,7 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 			PublishCloud(gicp_cloud_publisher_, gicp_output_cloud);
 		} else {
 			std::cout << "GICP did not converge." << std::endl;
+			ROS_ERROR("GICP did not converge");
 		}
 
 		
@@ -224,25 +238,6 @@ void ROSMultiLidarCalibratorApp::DownsampleCloud(pcl::PointCloud<PointT>::ConstP
 	voxelized.setLeafSize((float)in_leaf_size, (float)in_leaf_size, (float)in_leaf_size);
 	voxelized.filter(*out_cloud_ptr);
 }
-// 用于获取变换的线程函数(另起线程也不好使)
-// void ROSMultiLidarCalibratorApp::TransformThread() {
-//     while (ros::ok()) {
-//         try {
-//             tf::StampedTransform temp_transform;
-//             listener.waitForTransform(base_frame_, lidar_frame_, ros::Time(0), ros::Duration(0.1));
-//             listener.lookupTransform(base_frame_, lidar_frame_, ros::Time(0), temp_transform);
-            
-//             transform_mutex_.lock();
-//             transform_ = temp_transform;
-//             transform_available_ = true;
-//             transform_mutex_.unlock();
-//         }
-//         catch (tf::TransformException &ex) {
-//             ROS_ERROR("Fail to get tf: %s", ex.what());
-//             ros::Duration(0.1).sleep();
-//         }
-//     }
-// }
 
 void ROSMultiLidarCalibratorApp::InitializeROSIo(ros::NodeHandle &in_private_handle)
 {
@@ -281,18 +276,28 @@ void ROSMultiLidarCalibratorApp::InitializeROSIo(ros::NodeHandle &in_private_han
 	in_private_handle.param<double>("yaw", initial_yaw_, 0.0);
 
 	in_private_handle.param<bool>("proj", proj_, false);
+
+	// 坐标系配置
+	in_private_handle.param<std::string>("base_frame", base_frame_, "lidar");
+	in_private_handle.param<std::string>("lidar_frame", lidar_frame_, "livox_frame");
 	// 滤波范围
-	in_private_handle.param<double>("min_z_value", min_z_value_, -1.0);
-	in_private_handle.param<double>("max_z_value", max_z_value_, 2.0);
+	in_private_handle.param<double>("min_z_value", min_z_value_, -0.5);
+	in_private_handle.param<double>("max_z_value", max_z_value_, 0.5);
+	// 添加延时, 等待坐标系建立
+	ros::Duration(2.0).sleep();
+	// 获取base_link到lidar坐标系的转换关系, 并修正雷达过滤范围
+	TransformConverter();
+	min_z_value_ += transform_.getOrigin().z();
+	max_z_value_ += transform_.getOrigin().z();
+	ROS_ERROR("TransformConverter min_z_value_: %f",min_z_value_);
+	ROS_ERROR("TransformConverter max_z_value_: %f",max_z_value_);
 
 	// ICP与GICP配置
 	in_private_handle.param<int>("max_iterations", max_iterations_, 100);
 	in_private_handle.param<double>("transformation_epsilon", transformation_epsilon_, 1e-8);
 	in_private_handle.param<double>("euclidean_fitness_epsilon", euclidean_fitness_epsilon_, 0.1);
 
-	// 坐标系配置
-	in_private_handle.param<std::string>("base_frame", base_frame_, "base_link");
-	in_private_handle.param<std::string>("lidar_frame", lidar_frame_, "livox_frame");
+
 
 
 	ROS_INFO("[%s] Initialization Transform x: %.2f y: %.2f z: %.2f roll: %.2f pitch: %.2f yaw: %.2f", __APP_NAME__,
@@ -321,8 +326,8 @@ void ROSMultiLidarCalibratorApp::InitializeROSIo(ros::NodeHandle &in_private_han
 			                                               *cloud_parent_subscriber_,
 			                                               *cloud_child_subscriber_);
 	cloud_synchronizer_->registerCallback(boost::bind(&ROSMultiLidarCalibratorApp::PointsCallback, this, _1, _2));
-	// 另起线程进行坐标变换的获取
-	// boost::thread transform_thread(boost::bind(&ROSMultiLidarCalibratorApp::TransformThread, this));
+
+
 }
 
 
@@ -344,3 +349,4 @@ ROSMultiLidarCalibratorApp::ROSMultiLidarCalibratorApp()
 	//initialpose_quaternion_ = tf::Quaternion::getIdentity();
 	current_guess_ = Eigen::Matrix4f::Identity();
 }
+
