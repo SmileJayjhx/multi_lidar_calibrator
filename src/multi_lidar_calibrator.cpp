@@ -1,25 +1,3 @@
-/*
- * Copyright 2018-2019 Autoware Foundation. All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- ********************
- *  v1.0: amc-nu (abrahammonrroy@yahoo.com)
- *
- * multi_lidar_calibrator.cpp
- *
- *  Created on: Feb 27, 2018
- */
-
 #include "multi_lidar_calibrator.h"
 
 
@@ -157,21 +135,16 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	
 	// ICP 匹配
 	{
-	pcl::PointCloud<PointT>::Ptr icp_output_cloud(new pcl::PointCloud<PointT>);
-	Eigen::Translation3f init_translation(initial_x_, initial_y_, initial_z_);
-	Eigen::AngleAxisf init_rotation_x(initial_roll_, Eigen::Vector3f::UnitX());
-	Eigen::AngleAxisf init_rotation_y(initial_pitch_, Eigen::Vector3f::UnitY());
-	Eigen::AngleAxisf init_rotation_z(initial_yaw_, Eigen::Vector3f::UnitZ());
-	Eigen::Matrix4f initial_pose = (init_translation * init_rotation_z * init_rotation_y * init_rotation_x).matrix();
-
     // 示例：使用ICP进行点云匹配
     pcl::IterativeClosestPoint<PointT, PointT> icp;
+
     icp.setInputSource(in_child_cloud);
     icp.setInputTarget(processed_cloud);
 	icp.setMaximumIterations(max_iterations_); 
 	icp.setTransformationEpsilon(transformation_epsilon_); 
 	icp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
-	icp.align(*icp_output_cloud, initial_pose);
+	// 新增使用NDT的配准结果作为ICP的初始位姿
+	icp.align(*icp_output_cloud, current_guess_);
 
 	// 如果收敛则发布消息
 	if (icp.hasConverged()) {
@@ -203,13 +176,6 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 	// GICP 匹配
 	{
 		pcl::PointCloud<PointT>::Ptr gicp_output_cloud(new pcl::PointCloud<PointT>);
-
-		Eigen::Translation3f init_translation(initial_x_, initial_y_, initial_z_);
-		Eigen::AngleAxisf init_rotation_x(initial_roll_, Eigen::Vector3f::UnitX());
-		Eigen::AngleAxisf init_rotation_y(initial_pitch_, Eigen::Vector3f::UnitY());
-		Eigen::AngleAxisf init_rotation_z(initial_yaw_, Eigen::Vector3f::UnitZ());
-		Eigen::Matrix4f initial_pose = (init_translation * init_rotation_z * init_rotation_y * init_rotation_x).matrix();
-
 		// Example: Point cloud matching using GICP
 		pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp;
 		gicp.setInputSource(in_child_cloud);
@@ -217,8 +183,8 @@ void ROSMultiLidarCalibratorApp::PointsCallback(const sensor_msgs::PointCloud2::
 		gicp.setMaximumIterations(max_iterations_); 
 		gicp.setTransformationEpsilon(transformation_epsilon_); 
 		gicp.setEuclideanFitnessEpsilon(euclidean_fitness_epsilon_); 
-		// Set the initial pose and align
-		gicp.align(*gicp_output_cloud, initial_pose);
+		// 将先验位姿修改为NDT生成的位姿
+		gicp.align(*gicp_output_cloud, current_guess_);
 
 		if (gicp.hasConverged()) {
 			std::cout << "GICP converged." << std::endl
