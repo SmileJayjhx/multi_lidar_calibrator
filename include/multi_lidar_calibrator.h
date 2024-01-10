@@ -33,18 +33,21 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/surface/mls.h>
 #include <pcl/PCLPointCloud2.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/registration/ndt.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/gicp.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
-#include <pcl/filters/passthrough.h>
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
 #include <boost/thread/thread.hpp>
@@ -54,51 +57,49 @@
 class ROSMultiLidarCalibratorApp
 
 {
-	ros::NodeHandle                     node_handle_;
-	ros::Publisher                      calibrated_cloud_publisher_;
-	ros::Publisher                      icp_cloud_publisher_;
-	ros::Publisher                      gicp_cloud_publisher_;
-	ros::Publisher						proj_cloud_publisher_;
-	ros::Subscriber                     initialpose_subscriber_;
+	ros::NodeHandle		node_handle_;
+	ros::Publisher		calibrated_cloud_publisher_;
+	ros::Publisher		icp_cloud_publisher_;
+	ros::Publisher		gicp_cloud_publisher_;
+	ros::Publisher		proj_cloud_publisher_;
+	ros::Publisher		vol_child_publisher_;
+	ros::Subscriber		initialpose_subscriber_;
 
-	double                              voxel_size_;
-	double                              ndt_epsilon_;
-	double                              ndt_step_size_;
-	double                              ndt_resolution_;
+	double            voxel_size_;
+	double            ndt_epsilon_;
+	double            ndt_step_size_;
+	double            ndt_resolution_;
 
-	double                              initial_x_;
-	double                              initial_y_;
-	double                              initial_z_;
-	double                              initial_roll_;
-	double                              initial_pitch_;
-	double                              initial_yaw_;
-	bool								proj_;
-	double                              min_z_value_;
-	double                              max_z_value_;
-	double                              transformation_epsilon_;
-	double                              euclidean_fitness_epsilon_;
-	int                                 ndt_iterations_;
-	int                                 max_iterations_;
+	double            initial_x_;
+	double            initial_y_;
+	double            initial_z_;
+	double            initial_roll_;
+	double            initial_pitch_;
+	double            initial_yaw_;
+	bool							proj_;
+	double            min_z_value_;
+	double            max_z_value_;
+	double            transformation_epsilon_;
+	double            euclidean_fitness_epsilon_;
+	int               ndt_iterations_;
+	int               max_iterations_;
 
-	//tf::Quaternion                      initialpose_quaternion_;
-	//tf::Vector3                         initialpose_position_;
-	tf::TransformListener 				listener;
-
+	tf::TransformListener 			listener;
 	// base_link 和 lidar坐标系之间的转换关系
 	tf::StampedTransform 				transform_;
 
-	std::string                         parent_frame_;
-	std::string                         child_frame_;
+	std::string             parent_frame_;
+	std::string             child_frame_;
 	std::string 						base_frame_;
 	std::string 						lidar_frame_;
-	Eigen::Matrix4f                     current_guess_;
-	Eigen::Matrix4f                     icp_transformation;
+	Eigen::Matrix4f         current_guess_;
+	Eigen::Matrix4f         icp_transformation;
 
 	typedef
 	message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2,
-			sensor_msgs::PointCloud2>   SyncPolicyT;
+	sensor_msgs::PointCloud2>   SyncPolicyT;
 
-	typedef pcl::PointXYZ              PointT;
+	typedef pcl::PointXYZ    PointT;
 
 	message_filters::Subscriber<sensor_msgs::PointCloud2>   *cloud_parent_subscriber_, *cloud_child_subscriber_;
 	message_filters::Synchronizer<SyncPolicyT>              *cloud_synchronizer_;
@@ -125,7 +126,7 @@ class ROSMultiLidarCalibratorApp
 	 * @param out_cloud_ptr downsampled point cloud
 	 * @param in_leaf_size voxel side size
 	 */
-	void DownsampleCloud(pcl::PointCloud<PointT>::ConstPtr in_cloud_ptr, pcl::PointCloud<PointT>::Ptr out_cloud_ptr, double in_leaf_size);
+	// void DownsampleCloud(pcl::PointCloud<PointT>::ConstPtr in_cloud_ptr, pcl::PointCloud<PointT>::Ptr out_cloud_ptr, double in_leaf_size);
 
 	/*!
 	 * Publishes a PointCloud in the specified publisher

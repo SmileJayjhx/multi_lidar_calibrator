@@ -64,6 +64,7 @@ Parameter| Type| Description
 
 在rviz中会有提示, 其中不同算法产生的点云颜色不同, 可以选择一个较好的进行数据收集
 
-## TODO
-修改数据滤波的形式, 在处理点云时可以根据不同的坐标系进行过滤
-暂时的解决方法: 联合开源[点云滤波包](https://wiki.ros.org/pcl_ros/Tutorials/filters)进行处理
+## NOTICE
+因为点云包的数据量太大, 因此没有放进来, 可以考虑到阿里云盘下
+G, .bag格式不支持分享, tar.gz不支持分享, zip还是不支持分享, emmmm
+算了, 各位跑自己的包吧
